@@ -1,0 +1,6 @@
+bin/
+obj/
+*.user
+.vs/
+keys/extension-key.pem
+publish/

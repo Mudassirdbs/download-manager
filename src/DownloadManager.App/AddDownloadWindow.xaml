@@ -1,0 +1,59 @@
+<Window x:Class="DownloadManager.App.AddDownloadWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Download File Info" Width="640" SizeToContent="Height" ResizeMode="NoResize"
+        Icon="pack://application:,,,/app.ico" WindowStartupLocation="CenterScreen" Topmost="True"
+        ShowInTaskbar="True">
+  <Grid Margin="16">
+    <Grid.ColumnDefinitions>
+      <ColumnDefinition Width="90" />
+      <ColumnDefinition Width="*" />
+      <ColumnDefinition Width="Auto" />
+    </Grid.ColumnDefinitions>
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="Auto" />
+    </Grid.RowDefinitions>
+
+    <TextBlock Grid.Row="0" Text="URL" VerticalAlignment="Center" />
+    <TextBox Grid.Row="0" Grid.Column="1" Grid.ColumnSpan="2" x:Name="UrlBox" Margin="0,4" Padding="4,3"
+             TextChanged="OnUrlChanged" />
+
+    <TextBlock Grid.Row="1" Text="File name" VerticalAlignment="Center" />
+    <TextBox Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" x:Name="NameBox" Margin="0,4" Padding="4,3"
+             TextChanged="OnNameChanged" ToolTip="Leave empty to use the name the server sends" />
+
+    <TextBlock Grid.Row="2" Text="Quality" VerticalAlignment="Center" />
+    <DockPanel Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="2" Margin="0,4" LastChildFill="True">
+      <Button DockPanel.Dock="Right" x:Name="FindFormatsButton" Content="Find formats" Padding="10,3" Margin="6,0,0,0"
+              Click="OnFindFormats" ToolTip="Ask yt-dlp which qualities this page offers" />
+      <ComboBox x:Name="QualityBox" DisplayMemberPath="Display" SelectionChanged="OnQualityChanged" />
+    </DockPanel>
+
+    <TextBlock Grid.Row="3" Text="Category" VerticalAlignment="Center" />
+    <ComboBox Grid.Row="3" Grid.Column="1" x:Name="CategoryBox" Margin="0,4" Width="180" HorizontalAlignment="Left"
+              SelectionChanged="OnCategoryChanged" />
+
+    <TextBlock Grid.Row="4" Text="Save to" VerticalAlignment="Center" />
+    <TextBox Grid.Row="4" Grid.Column="1" x:Name="FolderBox" Margin="0,4" Padding="4,3" />
+    <Button Grid.Row="4" Grid.Column="2" Content="…" Width="32" Margin="6,4,0,4" Click="OnBrowse" />
+
+    <TextBlock Grid.Row="5" Grid.Column="1" Grid.ColumnSpan="2" x:Name="InfoText" Foreground="#6B7280" Margin="0,6,0,0"
+               TextWrapping="Wrap" />
+
+    <TextBlock Grid.Row="6" Grid.Column="1" Grid.ColumnSpan="2" x:Name="ErrorText" Foreground="#B91C1C" Margin="0,4,0,0"
+               TextWrapping="Wrap" Visibility="Collapsed" />
+
+    <StackPanel Grid.Row="7" Grid.ColumnSpan="3" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
+      <Button Content="Download later" Style="{StaticResource DialogButton}" Click="OnLater" />
+      <Button Content="Cancel" Style="{StaticResource DialogButton}" IsCancel="True" />
+      <Button x:Name="StartButton" Content="Start download" Style="{StaticResource PrimaryButton}" IsDefault="True" Click="OnStart" />
+    </StackPanel>
+  </Grid>
+</Window>

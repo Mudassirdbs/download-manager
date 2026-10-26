@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <!-- WPF and WinForms both define Application, MessageBox, etc.; keep usings explicit. -->
+    <ImplicitUsings>disable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <AssemblyName>DownloadManager</AssemblyName>
+    <RootNamespace>DownloadManager.App</RootNamespace>
+    <ApplicationIcon>app.ico</ApplicationIcon>
+    <Version>0.1.0</Version>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Resource Include="app.ico" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\DownloadManager.Core\DownloadManager.Core.csproj" />
+    <!-- Ships dmhost.exe next to DownloadManager.exe so the registered host path resolves. -->
+    <ProjectReference Include="..\DownloadManager.NativeHost\DownloadManager.NativeHost.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,39 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      body { margin: 0; width: 340px; font: 13px/1.4 system-ui, "Segoe UI", sans-serif; color: #111827; }
+      header { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid #E5E7EB; }
+      header img { width: 20px; height: 20px; }
+      header strong { flex: 1; }
+      .dot { width: 8px; height: 8px; border-radius: 50%; background: #9CA3AF; display: inline-block; margin-right: 6px; }
+      .dot.on { background: #16A34A; }
+      .row { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; }
+      #list { max-height: 300px; overflow: auto; border-top: 1px solid #E5E7EB; }
+      .item { display: flex; align-items: center; gap: 8px; padding: 7px 12px; border-bottom: 1px solid #F3F4F6; }
+      .item div { flex: 1; min-width: 0; }
+      .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .meta { color: #6B7280; font-size: 11px; }
+      button { border: 1px solid #2563EB; background: #2563EB; color: #fff; border-radius: 4px; padding: 3px 10px; cursor: pointer; font: inherit; }
+      button:disabled { background: #E5E7EB; border-color: #E5E7EB; color: #6B7280; cursor: default; }
+      button.link { background: none; color: #2563EB; border: 0; padding: 0; }
+      .empty { padding: 12px; color: #6B7280; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <img src="icons/icon32.png" alt="" />
+      <strong>DownloadManager</strong>
+      <button class="link" id="open">Open app</button>
+    </header>
+    <div class="row"><span><span class="dot" id="dot"></span><span id="status">Checking…</span></span></div>
+    <div class="row">
+      <label for="enabled">Catch downloads and show video button</label>
+      <input type="checkbox" id="enabled" />
+    </div>
+    <div class="row"><button id="formats">Find all formats on this page (yt-dlp)</button></div>
+    <div id="list"></div>
+    <script src="popup.js"></script>
+  </body>
+</html>
