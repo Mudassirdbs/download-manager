@@ -99,6 +99,7 @@ public abstract class TransferBase : ITransfer
                 catch (Exception ex)
                 {
                     Item.Error = ex.Message;
+                    Log.Warn($"{Item.Kind} download failed ({Log.Redact(Item.Url)}): {ex.GetType().Name}: {ex.Message}");
                     Set(DownloadStatus.Error);
                     return;
                 }

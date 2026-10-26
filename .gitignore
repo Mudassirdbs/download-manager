@@ -4,3 +4,4 @@ obj/
 .vs/
 keys/extension-key.pem
 publish/
+*.log

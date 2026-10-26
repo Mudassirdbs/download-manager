@@ -11,6 +11,10 @@ public sealed class DownloadSettings
     public int MaxConcurrentDownloads { get; set; } = 3;
     /// <summary>Combined limit for all downloads in bytes per second; 0 means unlimited.</summary>
     public long GlobalSpeedLimit { get; set; }
+    /// <summary>The first-run setup window was completed or dismissed.</summary>
+    public bool SetupShown { get; set; }
+    /// <summary>Last automatic yt-dlp update check; sites change often and old versions stop working.</summary>
+    public DateTimeOffset? YtDlpCheckedAt { get; set; }
 
     public static string DefaultPath => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "DownloadManager", "settings.json");

@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Text.Json;
 using DownloadManager.Core;
 using Microsoft.Win32;
@@ -38,7 +39,7 @@ static class NativeHostRegistration
             description = "DownloadManager browser bridge",
             path = hostExe,
             type = "stdio",
-            allowed_origins = new[] { $"chrome-extension://{Bridge.ChromeExtensionId}/" },
+            allowed_origins = Distribution.Current.ChromiumExtensionIds.Select(id => $"chrome-extension://{id}/").ToArray(),
         });
         var firefox = WriteManifest("firefox.json", new
         {
@@ -46,7 +47,7 @@ static class NativeHostRegistration
             description = "DownloadManager browser bridge",
             path = hostExe,
             type = "stdio",
-            allowed_extensions = new[] { Bridge.FirefoxExtensionId },
+            allowed_extensions = Distribution.Current.FirefoxExtensionIds.ToArray(),
         });
 
         foreach (var key in ChromiumKeys) SetDefault(key, chromium);

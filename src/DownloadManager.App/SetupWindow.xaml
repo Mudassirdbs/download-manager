@@ -1,0 +1,46 @@
+<Window x:Class="DownloadManager.App.SetupWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Set up DownloadManager" Width="600" SizeToContent="Height" ResizeMode="NoResize"
+        Icon="pack://application:,,,/app.ico" WindowStartupLocation="CenterScreen">
+  <StackPanel Margin="20">
+    <TextBlock Text="Welcome to DownloadManager" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,4" />
+    <TextBlock Text="Three quick steps and downloads from your browser will open here." Foreground="#4B5563" Margin="0,0,0,16" />
+
+    <TextBlock Text="1. Add the browser extension" FontWeight="SemiBold" />
+    <TextBlock TextWrapping="Wrap" Foreground="#4B5563" Margin="0,2,0,6">
+      It catches downloads and shows a Download button on videos.
+    </TextBlock>
+    <WrapPanel x:Name="StorePanel" Margin="0,0,0,4">
+      <Button x:Name="ChromeButton" Content="Chrome Web Store" Padding="12,4" Margin="0,0,6,6" Click="OnChrome" />
+      <Button x:Name="EdgeButton" Content="Edge Add-ons" Padding="12,4" Margin="0,0,6,6" Click="OnEdge" />
+      <Button x:Name="FirefoxButton" Content="Firefox Add-ons" Padding="12,4" Margin="0,0,6,6" Click="OnFirefox" />
+    </WrapPanel>
+    <Expander x:Name="ManualExpander" Header="Install it manually (Developer mode)" Margin="0,0,0,14">
+      <StackPanel Margin="18,6,0,0">
+        <TextBlock TextWrapping="Wrap" Foreground="#4B5563">
+          In Chrome, Edge or Brave open the extensions page (chrome://extensions or edge://extensions), turn on
+          Developer mode, choose "Load unpacked" and pick the folder below.
+        </TextBlock>
+        <Button Content="Open extension folder" HorizontalAlignment="Left" Padding="12,4" Margin="0,6,0,0" Click="OnOpenExtension" />
+      </StackPanel>
+    </Expander>
+
+    <TextBlock Text="2. Video tools" FontWeight="SemiBold" />
+    <TextBlock TextWrapping="Wrap" Foreground="#4B5563" Margin="0,2,0,6">
+      ffmpeg joins video and audio; yt-dlp reads sites such as YouTube. Both are free and are checked against
+      their publishers' SHA-256 checksums.
+    </TextBlock>
+    <DockPanel Margin="0,0,0,14">
+      <Button DockPanel.Dock="Right" x:Name="ToolsButton" Content="Install video tools" Padding="12,4" Click="OnInstallTools" />
+      <TextBlock x:Name="ToolsText" VerticalAlignment="Center" TextWrapping="Wrap" Foreground="#374151" />
+    </DockPanel>
+
+    <TextBlock Text="3. Start with Windows" FontWeight="SemiBold" />
+    <CheckBox x:Name="AutostartBox" Margin="0,4,0,0" Content="Start DownloadManager in the tray when I sign in (needed to catch downloads)" />
+
+    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,20,0,0">
+      <Button Content="Done" Style="{StaticResource PrimaryButton}" IsDefault="True" Click="OnDone" />
+    </StackPanel>
+  </StackPanel>
+</Window>

@@ -50,6 +50,12 @@ content.js ──runtime msg──▶ background.js ──native messaging (stdi
   (Chrome, Edge, Brave, Chromium, Vivaldi, Firefox under `HKCU\Software\…\NativeMessagingHosts`).
   `DownloadManager.exe --unregister` removes those entries.
 
+## Releasing to other people
+
+`powershell -ExecutionPolicy Bypass -File installer\build.ps1` builds self-contained x64 and ARM64 installers
+and the store packages for the extension. See [installer/PUBLISHING.md](installer/PUBLISHING.md) for store
+submission, extension IDs, code signing and what users need.
+
 ## Build and run
 
 ```bash

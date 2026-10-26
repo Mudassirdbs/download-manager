@@ -141,6 +141,8 @@ public sealed class DownloadService : IDisposable
         Settings.Save(_settingsPath);
     }
 
+    public void SaveSettings() => Settings.Save(_settingsPath);
+
     /// <summary>Connections per download; used by transfers started after the change.</summary>
     public void SetMaxConnections(int connections)
     {

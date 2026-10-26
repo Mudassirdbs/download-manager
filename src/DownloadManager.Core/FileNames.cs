@@ -26,8 +26,24 @@ public static class FileNames
         return Categories.TryGetValue(ext, out var c) ? c : "General";
     }
 
-    public static string DefaultRoot =>
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads");
+    /// <summary>The user's Downloads known folder, which may have been moved (another drive, OneDrive).</summary>
+    public static string DefaultRoot => _downloads ??= KnownDownloads()
+        ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads");
+
+    static string? _downloads;
+
+    static string? KnownDownloads()
+    {
+        if (!OperatingSystem.IsWindows()) return null;
+        var folderDownloads = new Guid("374DE290-123F-4565-9164-39C4925E467B");
+        if (SHGetKnownFolderPath(folderDownloads, 0, IntPtr.Zero, out var pointer) != 0) return null;
+        try { return System.Runtime.InteropServices.Marshal.PtrToStringUni(pointer); }
+        finally { System.Runtime.InteropServices.Marshal.FreeCoTaskMem(pointer); }
+    }
+
+    [System.Runtime.InteropServices.DllImport("shell32.dll")]
+    static extern int SHGetKnownFolderPath([System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.LPStruct)] Guid id,
+        uint flags, IntPtr token, out IntPtr path);
 
     /// <summary>File name from Content-Disposition (RFC 6266, filename* preferred), else the last URL path segment.</summary>
     public static string FromResponse(Uri url, HttpContentHeaders? headers)

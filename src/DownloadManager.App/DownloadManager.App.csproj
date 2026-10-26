@@ -11,7 +11,7 @@
     <AssemblyName>DownloadManager</AssemblyName>
     <RootNamespace>DownloadManager.App</RootNamespace>
     <ApplicationIcon>app.ico</ApplicationIcon>
-    <Version>0.1.0</Version>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
   </PropertyGroup>
 
   <ItemGroup>

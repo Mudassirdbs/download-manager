@@ -234,6 +234,7 @@ public sealed class YtDlpTask : ITransfer
         catch (Exception ex)
         {
             _item.Error = ex.Message;
+            Log.Warn($"yt-dlp download failed ({Log.Redact(_item.Url)}): {ex.Message}");
             Set(DownloadStatus.Error);
         }
     }

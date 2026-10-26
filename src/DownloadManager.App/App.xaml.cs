@@ -17,14 +17,35 @@ public partial class App : Application
     BridgeServer? _bridge;
     Forms.NotifyIcon? _tray;
     MainWindow? _main;
+    Forms.ToolStripMenuItem? _autostartItem;
     readonly BridgeConfig _config = new();
+    readonly CancellationTokenSource _exiting = new();
+
+    static string Version => typeof(App).Assembly.GetName().Version?.ToString(3) ?? "?";
 
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+        Log.Init("app");
+        DispatcherUnhandledException += (_, ev) =>
+        {
+            Log.Error("Unhandled UI error", ev.Exception);
+            MessageBox.Show($"Something went wrong:\n{ev.Exception.Message}\n\nDetails were saved to {Log.Folder}.", "DownloadManager",
+                MessageBoxButton.OK, MessageBoxImage.Error);
+            ev.Handled = true; // keep the tray app (and browser integration) alive
+        };
+        AppDomain.CurrentDomain.UnhandledException += (_, ev) => Log.Error("Unhandled error", ev.ExceptionObject as Exception);
+        TaskScheduler.UnobservedTaskException += (_, ev) =>
+        {
+            Log.Error("Unobserved task error", ev.Exception);
+            ev.SetObserved();
+        };
+
         if (e.Args.Contains("--unregister"))
         {
+            // Run by the uninstaller.
             NativeHostRegistration.Unregister();
+            Autostart.Set(false);
             Shutdown();
             return;
         }
@@ -40,9 +61,15 @@ public partial class App : Application
             return;
         }
 
-        try { NativeHostRegistration.Register(); }
+        Log.Info($"DownloadManager {Version} starting from {AppContext.BaseDirectory} on {Environment.OSVersion}");
+        try
+        {
+            NativeHostRegistration.Register();
+            Autostart.Repair();
+        }
         catch (Exception ex)
         {
+            Log.Error("Browser integration could not be registered", ex);
             MessageBox.Show($"Browser integration could not be registered:\n{ex.Message}", "DownloadManager",
                 MessageBoxButton.OK, MessageBoxImage.Warning);
         }
@@ -57,6 +84,44 @@ public partial class App : Application
         _showWait = ThreadPool.RegisterWaitForSingleObject(_showSignal, (_, _) => Dispatcher.BeginInvoke(ShowMain), null, -1, false);
 
         if (!background) ShowMain();
+        if (!_service.Settings.SetupShown) _ = Dispatcher.BeginInvoke(() => ShowSetup(firstRun: true));
+        _ = KeepYtDlpCurrentAsync(_exiting.Token);
+    }
+
+    void ShowSetup(bool firstRun)
+    {
+        var setup = new SetupWindow(_service!.Tools, firstRun);
+        if (_main is { IsVisible: true }) setup.Owner = _main;
+        setup.ShowDialog();
+        _service.Settings.SetupShown = true;
+        _service.SaveSettings();
+        if (_autostartItem is not null) _autostartItem.Checked = Autostart.IsEnabled;
+    }
+
+    /// <summary>
+    /// Sites change often and old yt-dlp versions stop working, so a copy we installed is refreshed every
+    /// three days in the background. A yt-dlp the user installed elsewhere (PATH) is left alone.
+    /// </summary>
+    async Task KeepYtDlpCurrentAsync(CancellationToken token)
+    {
+        try
+        {
+            await Task.Delay(TimeSpan.FromSeconds(30), token);
+            var tools = _service!.Tools;
+            var ours = tools.YtDlp is { } path && path.StartsWith(tools.Folder, StringComparison.OrdinalIgnoreCase);
+            if (!ours || _service.Settings.YtDlpCheckedAt > DateTimeOffset.Now.AddDays(-3)) return;
+            await ToolInstaller.InstallYtDlpAsync(tools, null, token);
+            _service.Settings.YtDlpCheckedAt = DateTimeOffset.Now;
+            _service.SaveSettings();
+            Log.Info("yt-dlp updated");
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex)
+        {
+            Log.Warn($"yt-dlp update check failed: {ex.Message}");
+        }
     }
 
     Forms.NotifyIcon CreateTray()
@@ -65,12 +130,21 @@ public partial class App : Application
         menu.Items.Add("Open DownloadManager", null, (_, _) => ShowMain());
         menu.Items.Add("Add URL…", null, (_, _) => NewDownload(null));
         menu.Items.Add(new Forms.ToolStripSeparator());
+        menu.Items.Add("Setup…", null, (_, _) => ShowSetup(firstRun: false));
+        _autostartItem = new Forms.ToolStripMenuItem("Start with Windows") { Checked = Autostart.IsEnabled, CheckOnClick = true };
+        _autostartItem.CheckedChanged += (_, _) =>
+        {
+            try { Autostart.Set(_autostartItem.Checked); }
+            catch (Exception ex) { Log.Error("Could not change autostart", ex); }
+        };
+        menu.Items.Add(_autostartItem);
+        menu.Items.Add(new Forms.ToolStripSeparator());
         menu.Items.Add("Exit", null, (_, _) => ExitApp());
         using var iconStream = GetResourceStream(new Uri("pack://application:,,,/app.ico"))!.Stream;
         var tray = new Forms.NotifyIcon
         {
             Icon = new System.Drawing.Icon(iconStream),
-            Text = "DownloadManager",
+            Text = $"DownloadManager {Version}",
             ContextMenuStrip = menu,
             Visible = true,
         };
@@ -88,6 +162,8 @@ public partial class App : Application
 
     public void ExitApp()
     {
+        Log.Info("Exiting");
+        _exiting.Cancel();
         _showWait?.Unregister(null);
         _bridge?.Dispose();
         _service?.Dispose();

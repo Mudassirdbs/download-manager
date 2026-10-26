@@ -8,6 +8,7 @@ using DownloadManager.Core;
 // over stdin/stdout; this process relays every frame unchanged to the desktop app's named pipe and back.
 // stdout carries protocol frames only, so diagnostics go to stderr (the browser logs it).
 
+Log.Init("host");
 using var stdin = Console.OpenStandardInput();
 using var stdout = Console.OpenStandardOutput();
 using var cts = new CancellationTokenSource();
@@ -26,6 +27,7 @@ try
 catch (Exception ex)
 {
     Console.Error.WriteLine($"dmhost: cannot reach DownloadManager: {ex.Message}");
+    Log.Warn($"Cannot reach DownloadManager: {ex.Message}");
     pipe = null;
 }
 if (pipe is null)
