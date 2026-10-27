@@ -6,6 +6,26 @@ app and puts a **Download** button over videos on web pages.
 This is an original implementation. Its design was informed by studying how Internet Download
 Manager's browser integration behaves; no IDM code, assets or protocol are reused.
 
+## Download
+
+Get the installer from the [latest release](https://github.com/Mudassirdbs/download-manager/releases/latest):
+
+| Your PC | File |
+|---|---|
+| Windows 10 (1607+) or 11, Intel/AMD — almost everyone | [`DownloadManager-Setup-1.0.0-x64.exe`](https://github.com/Mudassirdbs/download-manager/releases/download/v1.0.0/DownloadManager-Setup-1.0.0-x64.exe) |
+| Windows 11 on ARM (Snapdragon, Surface Pro X/11) | [`DownloadManager-Setup-1.0.0-arm64.exe`](https://github.com/Mudassirdbs/download-manager/releases/download/v1.0.0/DownloadManager-Setup-1.0.0-arm64.exe) |
+
+Not sure which? *Settings → System → About → System type* says "x64-based" or "ARM-based".
+
+1. Run the installer. It installs for your user only (no administrator rights) and includes everything it
+   needs, including .NET, FFmpeg and yt-dlp.
+2. Windows may show **"Windows protected your PC"** because the installer is not code-signed yet: choose
+   **More info → Run anyway**.
+3. On first start, the Setup window shows how to add the browser extension (Chrome, Edge, Brave). Until the
+   extension is in the browser stores, it is loaded from the app's folder in Developer mode.
+
+To uninstall, use *Settings → Apps → DownloadManager*.
+
 ## Status: milestone 3
 
 - **HLS** (`.m3u8`): built-in engine — quality picker from the master playlist, parallel segment download,
