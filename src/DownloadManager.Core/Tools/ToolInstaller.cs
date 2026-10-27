@@ -1,31 +1,32 @@
 using System.IO.Compression;
+using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 
 namespace DownloadManager.Core;
 
 /// <summary>
 /// Installs the external tools into <see cref="Tools.Folder"/> from their official release locations, checking
-/// each download against the SHA-256 the publisher lists next to it. Runs only when the user asks.
+/// each download against the SHA-256 the publisher lists next to it. The installer normally bundles both; this
+/// replaces a missing tool and keeps yt-dlp current. It uses the same builds as the installer: the yt-dlp release
+/// for this CPU and the LGPL "shared" FFmpeg build from BtbN/FFmpeg-Builds.
 /// </summary>
 public static class ToolInstaller
 {
-    public const string YtDlpUrl = "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe";
-    const string YtDlpSumsUrl = "https://github.com/yt-dlp/yt-dlp/releases/latest/download/SHA2-256SUMS";
-    public const string FfmpegUrl = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip";
-    const string FfmpegSumUrl = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip.sha256";
+    const string YtDlpBase = "https://github.com/yt-dlp/yt-dlp/releases/latest/download/";
+    const string FfmpegBase = "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/";
+    const string FfmpegBranch = "9.0";
+
+    static bool IsArm64 => RuntimeInformation.OSArchitecture == Architecture.Arm64;
 
     public static async Task InstallYtDlpAsync(Tools tools, IProgress<string>? progress, CancellationToken token)
     {
         Directory.CreateDirectory(tools.Folder);
+        var asset = IsArm64 ? "yt-dlp_arm64.exe" : "yt-dlp.exe";
         progress?.Report("Fetching checksums…");
-        var sums = await GetTextAsync(YtDlpSumsUrl, token);
-        var expected = sums.Split('\n')
-            .Select(l => l.Trim().Split(' ', 2, StringSplitOptions.RemoveEmptyEntries))
-            .FirstOrDefault(p => p.Length == 2 && p[1].Trim() == "yt-dlp.exe")?[0]
-            ?? throw new InvalidDataException("yt-dlp.exe is not listed in SHA2-256SUMS");
+        var expected = ExpectedHash(await GetTextAsync(YtDlpBase + "SHA2-256SUMS", token), asset);
 
         var temp = Path.Combine(tools.Folder, "yt-dlp.exe.download");
-        await DownloadAsync(YtDlpUrl, temp, "yt-dlp", progress, token);
+        await DownloadAsync(YtDlpBase + asset, temp, "yt-dlp", progress, token);
         Verify(temp, expected);
         File.Move(temp, Path.Combine(tools.Folder, "yt-dlp.exe"), overwrite: true);
         tools.Refresh();
@@ -35,22 +36,25 @@ public static class ToolInstaller
     public static async Task InstallFfmpegAsync(Tools tools, IProgress<string>? progress, CancellationToken token)
     {
         Directory.CreateDirectory(tools.Folder);
-        progress?.Report("Fetching checksum…");
-        var expected = (await GetTextAsync(FfmpegSumUrl, token)).Trim().Split(' ')[0];
+        var asset = $"ffmpeg-n{FfmpegBranch}-latest-{(IsArm64 ? "winarm64" : "win64")}-lgpl-shared-{FfmpegBranch}.zip";
+        progress?.Report("Fetching checksums…");
+        var expected = ExpectedHash(await GetTextAsync(FfmpegBase + "checksums.sha256", token), asset);
 
         var zip = Path.Combine(tools.Folder, "ffmpeg.zip.download");
         try
         {
-            await DownloadAsync(FfmpegUrl, zip, "ffmpeg", progress, token);
+            await DownloadAsync(FfmpegBase + asset, zip, "ffmpeg", progress, token);
             Verify(zip, expected);
             progress?.Report("Extracting ffmpeg…");
             using var archive = ZipFile.OpenRead(zip);
-            foreach (var name in new[] { "ffmpeg.exe", "ffprobe.exe" })
-            {
-                var entry = archive.Entries.FirstOrDefault(e => e.FullName.EndsWith("/bin/" + name, StringComparison.OrdinalIgnoreCase))
-                    ?? throw new InvalidDataException($"{name} not found in the archive");
-                entry.ExtractToFile(Path.Combine(tools.Folder, name), overwrite: true);
-            }
+            // ffmpeg.exe and ffprobe.exe need the LGPL libraries (DLLs) next to them; ffplay is not used.
+            var files = archive.Entries.Where(e => e.FullName.Contains("/bin/", StringComparison.OrdinalIgnoreCase)
+                    && e.Name.Length > 0 && !e.Name.Equals("ffplay.exe", StringComparison.OrdinalIgnoreCase)).ToList();
+            if (!files.Any(e => e.Name.Equals("ffmpeg.exe", StringComparison.OrdinalIgnoreCase)))
+                throw new InvalidDataException("ffmpeg.exe not found in the archive");
+            foreach (var entry in files) entry.ExtractToFile(Path.Combine(tools.Folder, entry.Name), overwrite: true);
+            archive.Entries.FirstOrDefault(e => e.Name.Equals("LICENSE.txt", StringComparison.OrdinalIgnoreCase))
+                ?.ExtractToFile(Path.Combine(tools.Folder, "FFmpeg-LICENSE.txt"), overwrite: true);
         }
         finally
         {
@@ -59,6 +63,13 @@ public static class ToolInstaller
         tools.Refresh();
         progress?.Report("ffmpeg installed");
     }
+
+    /// <summary>The hash for <paramref name="asset"/> in a sha256sum-style list ("hash  name" or "hash *name").</summary>
+    static string ExpectedHash(string sums, string asset) =>
+        sums.Split('\n')
+            .Select(l => l.Trim().Split(' ', 2, StringSplitOptions.RemoveEmptyEntries))
+            .FirstOrDefault(p => p.Length == 2 && p[1].Trim().TrimStart('*') == asset)?[0]
+        ?? throw new InvalidDataException($"{asset} is not listed in the published checksums");
 
     static async Task<string> GetTextAsync(string url, CancellationToken token) =>
         await Net.GetStringAsync(new Uri(url), new RequestContext(), token);

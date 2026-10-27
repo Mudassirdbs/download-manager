@@ -56,6 +56,7 @@ Type: filesandordirs; Name: "{app}\extension"
 
 [Icons]
 Name: "{autoprograms}\DownloadManager"; Filename: "{app}\DownloadManager.exe"
+Name: "{autoprograms}\DownloadManager third-party notices"; Filename: "{app}\THIRD-PARTY-NOTICES.txt"
 Name: "{autodesktop}\DownloadManager"; Filename: "{app}\DownloadManager.exe"; Tasks: desktopicon
 
 [Registry]

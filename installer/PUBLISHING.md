@@ -80,7 +80,20 @@ Host this text anywhere public (a GitHub page or gist works) and link it in each
 > through the browser's native messaging, so it can download the file the same way the browser would. The
 > application keeps its download list on your computer only. No analytics or tracking are used.
 
-## 3. Code signing (recommended before wide distribution)
+## 3. Bundled tools and licenses
+
+The installers ship FFmpeg and yt-dlp, so you are redistributing them:
+
+- **FFmpeg** is the LGPL v2.1+ "shared" build from BtbN/FFmpeg-Builds (no GPL components; libraries are separate
+  DLLs). `THIRD-PARTY-NOTICES.txt` names the exact FFmpeg commit and links its source, and `licenses\` holds the
+  license text. LGPL distribution also requires the source to stay obtainable; the notice links the upstream
+  commit and says it will be provided on request, so keep that promise (or host a copy of the source).
+- **yt-dlp** is public domain (Unlicense); its exe bundles Python and other components whose licenses are in
+  `licenses\yt-dlp-THIRD_PARTY_LICENSES.txt`.
+- Both files are listed in the Start menu ("DownloadManager third-party notices"). This is the usual practice,
+  not legal advice.
+
+## 4. Code signing (recommended before wide distribution)
 
 Unsigned installers trigger Windows SmartScreen ("Windows protected your PC" → *More info* → *Run anyway*)
 until enough people have run them. A code-signing certificate removes most of that friction:
@@ -89,9 +102,10 @@ until enough people have run them. A code-signing certificate removes most of th
 - Sign `DownloadManager.exe`, `dmhost.exe` and the setup files with `signtool sign /fd sha256 /tr <timestamp-url> /td sha256 …`;
   Inno Setup can call signtool through its `SignTool=` directive.
 
-## 4. What users need
+## 5. What users need
 
 - Windows 10 version 1607 or later, or Windows 11 (x64 or ARM64). Nothing else; .NET is included.
-- For streams and site videos, the first-run Setup window installs ffmpeg and yt-dlp (about 100 MB) with one
-  click. yt-dlp then updates itself every three days.
+- Nothing else to download: ffmpeg (LGPL build) and yt-dlp are bundled in `tools\`. yt-dlp is refreshed in the
+  background once the bundled copy is three days old (into `%LOCALAPPDATA%\DownloadManager\tools`, which is
+  searched first). Rebuild with `-RefreshTools` to bundle the newest yt-dlp in a release.
 - Logs for troubleshooting: `%LOCALAPPDATA%\DownloadManager\logs`.

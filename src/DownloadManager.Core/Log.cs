@@ -8,6 +8,8 @@ public static class Log
 {
     static readonly object Gate = new();
     static string _source = "app";
+    // Only the app and the native host log; libraries and tests that never call Init stay silent.
+    static bool _enabled;
 
     public static string Folder => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "DownloadManager", "logs");
@@ -15,6 +17,7 @@ public static class Log
     public static void Init(string source)
     {
         _source = source;
+        _enabled = true;
         try
         {
             Directory.CreateDirectory(Folder);
@@ -35,6 +38,7 @@ public static class Log
 
     static void Write(string level, string message)
     {
+        if (!_enabled) return;
         try
         {
             var line = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff} {level,-5} {message}{Environment.NewLine}";

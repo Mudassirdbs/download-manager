@@ -50,7 +50,14 @@ public partial class App : Application
             return;
         }
 
-        var background = e.Args.Contains("--background");
+        var args = Relaunch.TakeHandoff() ?? e.Args;
+        if (Relaunch.RedirectionGuardEnforced() && Relaunch.TryViaExplorer(args))
+        {
+            Shutdown();
+            return;
+        }
+
+        var background = args.Contains("--background");
         var user = Environment.UserName;
         _instance = new Mutex(true, $"DownloadManager.Instance.{user}", out var first);
         _showSignal = new EventWaitHandle(false, EventResetMode.AutoReset, $"DownloadManager.Show.{user}");
@@ -108,8 +115,14 @@ public partial class App : Application
         {
             await Task.Delay(TimeSpan.FromSeconds(30), token);
             var tools = _service!.Tools;
-            var ours = tools.YtDlp is { } path && path.StartsWith(tools.Folder, StringComparison.OrdinalIgnoreCase);
-            if (!ours || _service.Settings.YtDlpCheckedAt > DateTimeOffset.Now.AddDays(-3)) return;
+            // Ours: the bundled copy or one installed into the per-user tools folder. Updates always go to the
+            // per-user folder, which is searched first, so the installer's files are never modified.
+            var bundled = System.IO.Path.Combine(AppContext.BaseDirectory, "tools");
+            var ours = tools.YtDlp is { } path && (path.StartsWith(tools.Folder, StringComparison.OrdinalIgnoreCase)
+                || path.StartsWith(bundled, StringComparison.OrdinalIgnoreCase));
+            // A freshly installed copy is current; only refresh one that is three days old.
+            var age = DateTime.Now - System.IO.File.GetLastWriteTime(tools.YtDlp!);
+            if (!ours || age < TimeSpan.FromDays(3) || _service.Settings.YtDlpCheckedAt > DateTimeOffset.Now.AddDays(-3)) return;
             await ToolInstaller.InstallYtDlpAsync(tools, null, token);
             _service.Settings.YtDlpCheckedAt = DateTimeOffset.Now;
             _service.SaveSettings();
