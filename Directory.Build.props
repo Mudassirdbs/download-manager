@@ -1,10 +1,10 @@
-<Project>
+﻿<Project>
   <!-- One version for the app, the native host and the installer (installer/build.ps1 reads it). -->
   <PropertyGroup>
-    <Version>1.0.2</Version>
+    <Version>1.0.3</Version>
     <Product>DownloadManager</Product>
     <Company>DownloadManager</Company>
-    <Copyright>Copyright © 2026</Copyright>
+    <Copyright>Copyright Â© 2026</Copyright>
     <LangVersion>latest</LangVersion>
   </PropertyGroup>
 </Project>

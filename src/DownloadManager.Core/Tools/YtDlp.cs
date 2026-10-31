@@ -78,22 +78,36 @@ public static class YtDlp
             return new MediaInfo(title, Str(root, "extractor_key"), Num(root, "duration"), choices);
         }
 
-        static bool HasVideo(JsonElement e) => Str(e, "vcodec") is { } v && v != "none";
-        static bool HasAudio(JsonElement e) => Str(e, "acodec") is { } a && a != "none";
+        // Sites such as X leave codecs out: a missing vcodec with a height is video, and a missing acodec may be audio.
+        static bool HasVideo(JsonElement e) => Str(e, "vcodec") is var v && v != "none" && (v is not null || Num(e, "height") is > 0);
+        static bool HasAudio(JsonElement e) => Str(e, "acodec") != "none";
 
         // H.264/AAC play in every Windows player; VP9, AV1 and Opus need extra codecs in some.
         var audioOnly = formats.Where(e => HasAudio(e) && !HasVideo(e)).ToList();
-        var aac = audioOnly.Where(IsAac).MaxBy(Bitrate);
-        var bestAudio = aac.ValueKind != JsonValueKind.Undefined ? aac : audioOnly.MaxBy(Bitrate);
+        var aac = Best(audioOnly.Where(IsAac));
+        var bestAudio = aac.ValueKind != JsonValueKind.Undefined ? aac : Best(audioOnly);
         var audioSize = bestAudio.ValueKind == JsonValueKind.Undefined ? null : Size(bestAudio);
         var byHeight = formats.Where(HasVideo).Where(e => Num(e, "height") is > 0)
             .GroupBy(e => (int)Num(e, "height")!.Value).OrderByDescending(g => g.Key).ToList();
 
+        // A complete MP4 with undeclared codecs: H.264 in practice, and often far better than the same height's HLS.
+        static JsonElement DirectFile(IGrouping<int, JsonElement> g) =>
+            Best(g.Where(e => Str(e, "vcodec") is null && Str(e, "ext") == "mp4" && HasAudio(e)));
+
         // The format the selector for this height will most likely pick: H.264 when that height has it.
+        static bool PrefersDirectFile(IGrouping<int, JsonElement> g)
+        {
+            var file = DirectFile(g);
+            if (file.ValueKind == JsonValueKind.Undefined) return false;
+            var h264 = Best(g.Where(IsH264));
+            return h264.ValueKind == JsonValueKind.Undefined || Bitrate(file) > Bitrate(h264);
+        }
+
         JsonElement PickAt(IGrouping<int, JsonElement> g)
         {
-            var h264 = g.Where(IsH264).ToList();
-            return h264.Count > 0 ? h264.MaxBy(Bitrate) : g.MaxBy(Bitrate);
+            if (PrefersDirectFile(g)) return DirectFile(g);
+            var h264 = Best(g.Where(IsH264));
+            return h264.ValueKind != JsonValueKind.Undefined ? h264 : Best(g);
         }
 
         long? SizeOf(JsonElement pick)
@@ -106,9 +120,11 @@ public static class YtDlp
         {
             var pick = PickAt(g);
             var fps = Num(pick, "fps") ?? 0;
-            var label = $"{g.Key}p" + (fps > 30 ? $"{Math.Round(fps)}" : "") + (IsH264(pick) ? "" : $" · {CodecName(Str(pick, "vcodec"))}");
+            var named = Str(pick, "vcodec") is { } codec && !IsH264(pick) ? $" · {CodecName(codec)}" : "";
+            var label = $"{g.Key}p" + (fps > 30 ? $"{Math.Round(fps)}" : "") + named;
             if (labelPrefix is not null) label = $"{labelPrefix} ({label})";
-            return new FormatChoice(SelectorFor(g.Key), label, "mp4", SizeOf(pick), false);
+            var selector = PrefersDirectFile(g) ? $"b[height={g.Key}][ext=mp4]/{SelectorFor(g.Key)}" : SelectorFor(g.Key);
+            return new FormatChoice(selector, label, "mp4", SizeOf(pick), false);
         }
 
         if (byHeight.Count > 0)
@@ -138,9 +154,15 @@ public static class YtDlp
     static bool IsAac(JsonElement e) => Str(e, "acodec")?.StartsWith("mp4a", StringComparison.Ordinal) == true;
     static double Bitrate(JsonElement e) => Num(e, "tbr") ?? 0;
 
-    static string CodecName(string? vcodec) => vcodec switch
+    /// <summary>The highest-bitrate format, or an undefined element when there is none (MaxBy throws for structs).</summary>
+    static JsonElement Best(IEnumerable<JsonElement> formats)
     {
-        null => "other codec",
+        var list = formats.ToList();
+        return list.Count == 0 ? default : list.MaxBy(Bitrate);
+    }
+
+    static string CodecName(string vcodec) => vcodec switch
+    {
         _ when vcodec.StartsWith("vp09", StringComparison.Ordinal) || vcodec.StartsWith("vp9", StringComparison.Ordinal) => "VP9",
         _ when vcodec.StartsWith("av01", StringComparison.Ordinal) => "AV1",
         _ when vcodec.StartsWith("hev1", StringComparison.Ordinal) || vcodec.StartsWith("hvc1", StringComparison.Ordinal) => "HEVC",

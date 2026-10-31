@@ -56,6 +56,40 @@ public sealed class YtDlpTests
         Assert.Equal("b[height<=1080]", alternatives[^1]);
     }
 
+    [Fact]
+    public void Handles_sites_that_leave_codecs_out()
+    {
+        // Shape of an X post: undeclared codecs, and no audio format with a declared acodec.
+        using var json = JsonDocument.Parse("""
+            {
+              "title": "post",
+              "formats": [
+                { "format_id": "hls-audio-128000", "ext": "mp4", "vcodec": "none", "tbr": 128, "protocol": "m3u8_native" },
+                { "format_id": "http-256", "ext": "mp4", "height": 270, "tbr": 256, "filesize": 721504, "protocol": "https" },
+                { "format_id": "hls-120", "ext": "mp4", "vcodec": "avc1.4D400D", "acodec": "none", "height": 270, "tbr": 120, "protocol": "m3u8_native" },
+                { "format_id": "http-2176", "ext": "mp4", "height": 576, "tbr": 2176, "filesize": 6132784, "protocol": "https" },
+                { "format_id": "hls-580", "ext": "mp4", "vcodec": "avc1.64001F", "acodec": "none", "height": 576, "tbr": 580, "protocol": "m3u8_native" }
+              ]
+            }
+            """);
+        var info = YtDlp.Describe(json.RootElement);
+
+        Assert.Equal(["Best quality (576p)", "576p", "270p", "Audio only"], info.Choices.Select(c => c.Label));
+        Assert.StartsWith("b[height=576][ext=mp4]/", info.Choices[1].Selector);
+        Assert.Equal(6132784, info.Choices[1].Size);
+    }
+
+    [Fact]
+    public void Works_when_a_page_has_no_audio_only_format()
+    {
+        using var json = JsonDocument.Parse("""
+            { "title": "t", "formats": [ { "format_id": "1", "ext": "mp4", "vcodec": "avc1", "acodec": "mp4a", "height": 720, "tbr": 900 } ] }
+            """);
+        var info = YtDlp.Describe(json.RootElement);
+
+        Assert.Equal(["Best quality (720p)", "720p"], info.Choices.Select(c => c.Label));
+    }
+
     [Theory]
     [InlineData("ERROR: [youtube] abc: Requested format is not available. Use --list-formats", true)]
     [InlineData("ERROR: [youtube] abc: No video formats found!", true)]

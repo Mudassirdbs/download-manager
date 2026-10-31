@@ -1,7 +1,7 @@
-{
+﻿{
   "manifest_version": 3,
   "name": "DownloadManager Integration",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Hands browser downloads and page videos to the DownloadManager desktop app.",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA3VZBhu6GeGHrjaebXr38W4RXFW2vECVtwMXniWGJz9fFc8WXOnHUe8tH266eyXmb8EwR6v++0SjnQh2bN0PvzWPlaZ8JAyPSaD0xU++AEltA+IHohEnLv/enC6KXVqK9HzjtKLyp6/JCW3WNnK8ZxvT5ZCOEPlLzlDnn3rDtOBSmL4jpxruv/KXxwFq3d0GCb4Xw9O38TgohgM8Gxi0HsdDCANcFXb04wfP3ZATZE26PK7l1IuCLFQG6OmICEp2CafpRyc5ZPM8LYeEYdnvEgLeF5QJL6ncqVR4OGzZNBSYMxQcwnDQeUmPbiG/+HnMrMt1hjTVMh9TA2tbmV40VUQIDAQAB",
   "minimum_chrome_version": "121",
