@@ -194,6 +194,33 @@ public sealed class DownloadTaskTests : IDisposable
     }
 
     [Fact]
+    public async Task Repeats_post_downloads_with_their_body_and_headers()
+    {
+        var body = Payload(200_000);
+        using var server = new TestServer { Body = body };
+        var item = new DownloadItem
+        {
+            Url = server.Url("/export"),
+            Folder = _folder,
+            FileName = "report.csv",
+            Request = new RequestContext
+            {
+                Method = "POST",
+                Body = Convert.ToBase64String("id=7&format=csv"u8.ToArray()),
+                Headers = new() { ["Authorization"] = "Bearer abc", ["Content-Type"] = "application/x-www-form-urlencoded" },
+            },
+        };
+
+        await new DownloadTask(item, Single).RunAsync();
+
+        Assert.Equal(DownloadStatus.Completed, item.Status);
+        Assert.Equal(body, File.ReadAllBytes(item.FullPath!));
+        Assert.All(server.Methods, m => Assert.Equal("POST", m));
+        Assert.Equal("id=7&format=csv", server.LastBody);
+        Assert.Equal("Bearer abc", server.LastAuthorization);
+    }
+
+    [Fact]
     public async Task Does_not_overwrite_existing_file()
     {
         Directory.CreateDirectory(_folder);

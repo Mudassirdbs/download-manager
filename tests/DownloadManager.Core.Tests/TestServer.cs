@@ -19,6 +19,9 @@ sealed class TestServer : IDisposable
     /// <summary>Path (without query) → content; other paths serve <see cref="Body"/>.</summary>
     public Dictionary<string, byte[]> Files { get; } = [];
     public List<string> Paths { get; } = [];
+    public List<string> Methods { get; } = [];
+    public string? LastBody { get; private set; }
+    public string? LastAuthorization { get; private set; }
     public string? DispositionName { get; init; }
     public bool SupportRanges { get; init; } = true;
     /// <summary>Strong ETag sent with every response; If-Range must match it for a 206.</summary>
@@ -76,17 +79,27 @@ sealed class TestServer : IDisposable
         var requestLine = await reader.ReadLineAsync();
         if (requestLine is null) return;
         string? range = null, ifRange = null;
+        var bodyLength = 0;
         string? line;
         while (!string.IsNullOrEmpty(line = await reader.ReadLineAsync()))
         {
             if (line.StartsWith("Range:", StringComparison.OrdinalIgnoreCase)) range = line[6..].Trim();
             else if (line.StartsWith("If-Range:", StringComparison.OrdinalIgnoreCase)) ifRange = line[9..].Trim();
+            else if (line.StartsWith("Authorization:", StringComparison.OrdinalIgnoreCase)) LastAuthorization = line[14..].Trim();
+            else if (line.StartsWith("Content-Length:", StringComparison.OrdinalIgnoreCase)) bodyLength = int.Parse(line[15..].Trim());
+        }
+        if (bodyLength > 0)
+        {
+            var chars = new char[bodyLength];
+            await reader.ReadBlockAsync(chars, 0, bodyLength);
+            LastBody = new string(chars);
         }
         var path = requestLine.Split(" ")[1].Split("?")[0];
         lock (RangeHeaders)
         {
             RangeHeaders.Add(range);
             Paths.Add(path);
+            Methods.Add(requestLine.Split(" ")[0]);
         }
         if (requestLine.Contains(" /missing "))
         {

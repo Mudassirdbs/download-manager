@@ -29,6 +29,7 @@ const state = {
   userEnabled: true, // toggle from the popup, stored locally
   pending: new Map(), // requestId -> { resolve, timer }
   media: new Map(), // tabId -> Map(key -> item)
+  pages: new Map(), // tabId -> page address without query or hash
   bypassUntil: 0,
   retryTimer: null,
   problem: null, // why the last connection attempt failed, in words a user can act on
@@ -221,6 +222,77 @@ function header(headers, name) {
   return h ? h.value : null;
 }
 
+// ---------------------------------------------------------------- request details
+
+// What the browser really sent, so the app can repeat a request that needs more than cookies.
+const MAX_TRACKED_REQUESTS = 200;
+const MAX_REPLAY_BODY_BYTES = 1024 * 1024;
+const NOT_FORWARDED = /^(cookie|host|content-length|connection|range|accept-encoding|user-agent|referer|upgrade-insecure-requests|if-.*|sec-.*)$/i;
+const TRACKED_TYPES = ["main_frame", "sub_frame", "media", "xmlhttprequest", "object", "other"];
+const tracked = new Map(); // url -> { method, body, replayable, headers, referrer }
+
+function track(url) {
+  let entry = tracked.get(url);
+  if (entry) tracked.delete(url); // re-insert as most recent
+  entry ??= {};
+  tracked.set(url, entry);
+  while (tracked.size > MAX_TRACKED_REQUESTS) tracked.delete(tracked.keys().next().value);
+  return entry;
+}
+
+function toBase64(bytes) {
+  let text = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) text += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(text);
+}
+
+/** The POST body as base64, or null when it cannot be repeated (files, or too large). */
+function encodeBody(requestBody) {
+  if (requestBody?.formData) {
+    const form = new URLSearchParams();
+    for (const [name, values] of Object.entries(requestBody.formData)) for (const v of values) form.append(name, v);
+    return toBase64(new TextEncoder().encode(form.toString()));
+  }
+  const raw = requestBody?.raw;
+  if (!raw?.length || raw.some((part) => !part.bytes)) return null;
+  const size = raw.reduce((n, part) => n + part.bytes.byteLength, 0);
+  if (size > MAX_REPLAY_BODY_BYTES) return null;
+  const bytes = new Uint8Array(size);
+  let offset = 0;
+  for (const part of raw) {
+    bytes.set(new Uint8Array(part.bytes), offset);
+    offset += part.bytes.byteLength;
+  }
+  return toBase64(bytes);
+}
+
+chrome.webRequest.onBeforeRequest.addListener(
+  (details) => {
+    const entry = track(details.url);
+    entry.method = details.method;
+    entry.body = details.method === "POST" ? encodeBody(details.requestBody) : null;
+    entry.replayable = details.method !== "POST" || entry.body !== null;
+  },
+  { urls: ["http://*/*", "https://*/*"], types: TRACKED_TYPES },
+  ["requestBody"],
+);
+
+chrome.webRequest.onSendHeaders.addListener(
+  (details) => {
+    const entry = track(details.url);
+    const headers = {};
+    for (const h of details.requestHeaders ?? []) {
+      if (h.value !== undefined && !NOT_FORWARDED.test(h.name)) headers[h.name] = h.value;
+    }
+    entry.headers = headers;
+    entry.referrer = header(details.requestHeaders, "referer");
+    // A multipart form cannot be rebuilt from Chrome's parsed fields.
+    if (/^multipart\//i.test(header(details.requestHeaders, "content-type") ?? "")) entry.replayable = false;
+  },
+  { urls: ["http://*/*", "https://*/*"], types: TRACKED_TYPES },
+  chrome.webRequest.OnSendHeadersOptions?.EXTRA_HEADERS ? ["requestHeaders", "extraHeaders"] : ["requestHeaders"],
+);
+
 // ---------------------------------------------------------------- download interception
 
 const handled = new Set();
@@ -235,7 +307,12 @@ async function handleDownload(item, suggestedName) {
   if (!/^https?:/i.test(url) || siteExcluded(url)) return;
 
   const name = baseName(suggestedName) || baseName(new URL(url).pathname);
-  if (!state.config.catchExtensions.includes(extOf(name))) return;
+  const ext = extOf(name);
+  // A download without a usable extension is still a download unless it is plainly a page or an image.
+  const catchable = ext ? state.config.catchExtensions.includes(ext) : !/^(text|image)\//i.test(item.mime || "");
+  if (!catchable) return;
+  const sent = tracked.get(url) ?? tracked.get(item.url);
+  if (sent && !sent.replayable) return; // the browser keeps a POST the app could not repeat
   const size = item.fileSize > 0 ? item.fileSize : item.totalBytes > 0 ? item.totalBytes : null;
   if (state.config.minSizeBytes && size && size < state.config.minSizeBytes) return;
 
@@ -244,9 +321,12 @@ async function handleDownload(item, suggestedName) {
     {
       type: "download",
       url,
-      referrer: item.referrer || null,
+      referrer: item.referrer || sent?.referrer || null,
       cookies: await cookieHeader(url),
       userAgent: navigator.userAgent,
+      headers: sent?.headers ?? null,
+      method: sent?.method === "POST" ? "POST" : null,
+      body: sent?.body ?? null,
       fileName: name || null,
       size,
       mime: item.mime || null,
@@ -280,6 +360,8 @@ if (chrome.downloads.onDeterminingFilename) {
 
 // ---------------------------------------------------------------- media sniffing
 
+// Pre-roll ads are real video files, but never what the button should offer.
+const AD_HOSTS = ["doubleclick.net", "googlesyndication.com", "googleadservices.com", "gvt1.com", "imasdk.googleapis.com"];
 const SEGMENT_EXT = new Set(["ts", "m4s", "aac", "m4f", "cmfv", "cmfa"]);
 const VIDEO_EXT = new Set(["mp4", "webm", "mkv", "mov", "flv", "m4v", "avi", "wmv", "3gp"]);
 const AUDIO_EXT = new Set(["mp3", "m4a", "ogg", "opus", "wav", "flac", "weba"]);
@@ -304,7 +386,7 @@ function mediaKey(url) {
 
 chrome.webRequest.onHeadersReceived.addListener(
   (details) => {
-    if (details.tabId < 0 || (details.statusCode !== 200 && details.statusCode !== 206)) return;
+    if (details.statusCode !== 200 && details.statusCode !== 206) return;
     const mime = (header(details.responseHeaders, "content-type") || "").split(";")[0].trim().toLowerCase();
     let url;
     try {
@@ -312,8 +394,11 @@ chrome.webRequest.onHeadersReceived.addListener(
     } catch {
       return;
     }
-    const kind = classify(mime, extOf(url.pathname));
-    if (!kind || hostMatches(details.url, FRAGMENT_HOSTS)) return;
+    const disposition = header(details.responseHeaders, "content-disposition") ?? "";
+    const attachmentName = /filename\*?=(?:UTF-8'')?"?([^";]+)/i.exec(disposition)?.[1];
+    const kind = classify(mime, extOf(attachmentName ?? "") || extOf(url.pathname));
+    if (!kind || hostMatches(details.url, FRAGMENT_HOSTS) || hostMatches(details.url, AD_HOSTS)) return;
+    if (kind === "subtitle" && /sprite|thumb|storyboard/i.test(url.pathname)) return; // seek-bar previews
 
     let size = null;
     const range = header(details.responseHeaders, "content-range");
@@ -323,21 +408,47 @@ chrome.webRequest.onHeadersReceived.addListener(
     // Tiny progressive files are usually beacons or preview loops.
     if ((kind === "progressive" || kind === "audio") && size !== null && size < 64 * 1024) return;
 
-    addMedia(details.tabId, {
+    const item = {
       key: mediaKey(details.url),
       url: mediaKey(details.url),
+      requestUrl: details.url,
       kind,
       mime: mime || null,
       size,
       frameUrl: details.documentUrl || details.initiator || null,
       seen: Date.now(),
-    });
+    };
+    if (details.tabId >= 0) addMedia(details.tabId, item);
+    else tabForWorkerRequest(details).then((tabId) => tabId >= 0 && addMedia(tabId, item));
   },
   { urls: ["http://*/*", "https://*/*"], types: ["media", "xmlhttprequest", "object", "other"] },
   ["responseHeaders"],
 );
 
+/** Service workers fetch media with no tab; match them to the page they belong to, preferring the active tab. */
+async function tabForWorkerRequest(details) {
+  const from = details.initiator || details.documentUrl;
+  if (!from || from.startsWith("chrome-extension:") || from.startsWith("moz-extension:")) return -1;
+  let origin;
+  try {
+    origin = new URL(from).origin;
+  } catch {
+    return -1;
+  }
+  const tabs = await chrome.tabs.query({ url: origin + "/*" }).catch(() => []);
+  return (tabs.find((t) => t.active) ?? tabs[0])?.id ?? -1;
+}
+
+function pageOf(url) {
+  return url.split(/[?#]/)[0];
+}
+
 function addMedia(tabId, item) {
+  if (!state.pages.has(tabId)) {
+    chrome.tabs.get(tabId).then((tab) => {
+      if (tab?.url && !state.pages.has(tabId)) state.pages.set(tabId, pageOf(tab.url));
+    }).catch(() => {});
+  }
   let list = state.media.get(tabId);
   if (!list) state.media.set(tabId, (list = new Map()));
   const existing = list.get(item.key);
@@ -353,7 +464,17 @@ function addMedia(tabId, item) {
 }
 
 function mediaFor(tabId) {
-  return [...(state.media.get(tabId)?.values() ?? [])].sort((a, b) => (b.size ?? 0) - (a.size ?? 0));
+  const rank = { hls: 0, dash: 0, progressive: 1, audio: 2, subtitle: 3 };
+  // Players fetch the master playlist first; later playlists in its folder are its qualities, which the app lists.
+  const folders = new Set();
+  const items = [...(state.media.get(tabId)?.values() ?? [])].filter((item) => {
+    if (item.kind !== "hls") return true;
+    const folder = item.url.split("?")[0].replace(/[^/]*$/, "");
+    if (folders.has(folder)) return false;
+    folders.add(folder);
+    return true;
+  });
+  return items.sort((a, b) => rank[a.kind] - rank[b.kind] || (b.size ?? 0) - (a.size ?? 0));
 }
 
 function updateBadge(tabId) {
@@ -369,12 +490,21 @@ function updateAllBadges() {
 
 chrome.tabs.onUpdated.addListener((tabId, change) => {
   // A new document (or SPA route) starts a fresh media list.
-  if (change.url) {
+  // Only a new page starts a fresh list: players often change query values or the hash while playing.
+  if (!change.url) return;
+  const page = pageOf(change.url);
+  const previous = state.pages.get(tabId);
+  state.pages.set(tabId, page);
+  if (previous !== undefined && previous !== page) {
     state.media.delete(tabId);
     updateBadge(tabId);
+    chrome.tabs.sendMessage(tabId, { type: "media-updated", count: 0 }).catch(() => {});
   }
 });
-chrome.tabs.onRemoved.addListener((tabId) => state.media.delete(tabId));
+chrome.tabs.onRemoved.addListener((tabId) => {
+  state.media.delete(tabId);
+  state.pages.delete(tabId);
+});
 
 // ---------------------------------------------------------------- content script & popup messages
 
@@ -394,6 +524,8 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
 
     case "download-media":
       (async () => {
+        const seen = state.media.get(tabId)?.get(mediaKey(msg.url));
+        const sent = tracked.get(seen?.requestUrl ?? msg.url);
         const result = await request(
           {
             type: "media",
@@ -403,7 +535,8 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
             size: msg.size || null,
             title: msg.title || null,
             pageUrl: msg.pageUrl || null,
-            referrer: msg.pageUrl || null,
+            referrer: sent?.referrer || msg.pageUrl || null,
+            headers: sent?.headers ?? null,
             cookies: await cookieHeader(msg.url),
             cookieJar: msg.kind === "dash" ? await cookieJar(msg.url) : null,
             userAgent: navigator.userAgent,

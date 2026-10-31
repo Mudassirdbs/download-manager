@@ -36,6 +36,9 @@ public sealed class BridgeMessage
     public List<BrowserCookie>? CookieJar { get; set; }
     public string? UserAgent { get; set; }
     public Dictionary<string, string>? Headers { get; set; }
+    /// <summary>"POST" with a base64 <see cref="Body"/> when the browser's request must be repeated as sent.</summary>
+    public string? Method { get; set; }
+    public string? Body { get; set; }
     public string? FileName { get; set; }
     public long? Size { get; set; }
     public string? Mime { get; set; }
@@ -65,8 +68,12 @@ public sealed class BridgeConfig
     public bool Enabled { get; set; } = true;
     public List<string> CatchExtensions { get; set; } =
     [
-        "zip", "rar", "7z", "gz", "tar", "iso", "exe", "msi", "apk", "dmg", "pdf", "doc", "docx", "xls", "xlsx",
-        "ppt", "pptx", "epub", "mp3", "m4a", "flac", "wav", "mp4", "mkv", "webm", "avi", "mov", "wmv", "torrent",
+        "zip", "rar", "7z", "gz", "tgz", "bz2", "xz", "tar", "iso", "img", "bin", "cab", "z", "r00", "001",
+        "exe", "msi", "msu", "apk", "xapk", "dmg", "pkg", "deb", "rpm", "appimage", "jar",
+        "pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "odt", "ods", "odp", "rtf", "epub", "mobi", "azw3", "djvu",
+        "mp3", "m4a", "aac", "flac", "wav", "wma", "ogg", "opus", "ape", "mid", "midi",
+        "mp4", "m4v", "mkv", "webm", "avi", "mov", "wmv", "flv", "mpg", "mpeg", "3gp", "ogv", "ts", "vob", "rm", "rmvb",
+        "torrent", "psd", "ai", "ttf", "otf", "woff2", "sql", "csv",
     ];
     public List<string> ExcludeSites { get; set; } = [];
     public long MinSizeBytes { get; set; }

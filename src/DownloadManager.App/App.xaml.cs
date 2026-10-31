@@ -231,6 +231,8 @@ public partial class App : Application
         Cookies = m.Cookies,
         UserAgent = m.UserAgent,
         Headers = m.Headers,
+        Method = m.Method,
+        Body = m.Body,
         CookieJar = m.CookieJar,
     };
 

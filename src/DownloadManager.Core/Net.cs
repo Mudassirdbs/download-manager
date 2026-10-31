@@ -27,7 +27,13 @@ public static class Net
 
     public static HttpRequestMessage NewRequest(Uri url, RequestContext ctx)
     {
-        var request = new HttpRequestMessage(HttpMethod.Get, url);
+        var request = new HttpRequestMessage(ctx.Method == "POST" ? HttpMethod.Post : HttpMethod.Get, url);
+        if (ctx.Method == "POST" && ctx.Body is not null)
+        {
+            request.Content = new ByteArrayContent(Convert.FromBase64String(ctx.Body));
+            var type = ctx.Headers?.FirstOrDefault(h => h.Key.Equals("content-type", StringComparison.OrdinalIgnoreCase)).Value;
+            request.Content.Headers.TryAddWithoutValidation("Content-Type", type ?? "application/x-www-form-urlencoded");
+        }
         if (ctx.Headers is not null)
             foreach (var (name, value) in ctx.Headers)
                 if (!SkippedHeaders.Contains(name)) request.Headers.TryAddWithoutValidation(name, value);

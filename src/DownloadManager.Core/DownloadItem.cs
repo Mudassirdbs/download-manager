@@ -42,6 +42,10 @@ public sealed record RequestContext
     public string? Cookies { get; init; }
     public string? UserAgent { get; init; }
     public Dictionary<string, string>? Headers { get; init; }
+    /// <summary>"POST" for downloads that only answer to the page's form; null means GET.</summary>
+    public string? Method { get; init; }
+    /// <summary>Base64 POST body.</summary>
+    public string? Body { get; init; }
     /// <summary>Scoped cookies for tools that make their own requests (yt-dlp).</summary>
     public List<BrowserCookie>? CookieJar { get; init; }
 }

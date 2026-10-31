@@ -6,13 +6,18 @@
   if (window.__dmContent) return;
   window.__dmContent = true;
 
-  const MIN_WIDTH = 200;
-  const MIN_HEIGHT = 112;
+  const MIN_WIDTH = 100;
+  const MIN_HEIGHT = 56;
+  const LARGE_FRAME_AREA = 200 * 112;
 
   let target = null; // the player element the button is attached to
   let showButton = true;
   let host, root, button, menu;
   let frame = 0;
+  let lastItems = [];
+  let mediaCount = 0; // media the background has seen for this tab
+  let shadowMedia = [];
+  let lastShadowScan = 0;
 
   // ------------------------------------------------------------ overlay UI (closed shadow root)
 
@@ -39,7 +44,7 @@
         .item:disabled { color: #9CA3AF; cursor: default; }
         .meta { color: #6B7280; font-size: 11px; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .note { padding: 8px 12px; color: #6B7280; }
-        .status { padding: 8px 12px; color: #065F46; }
+        .status { padding: 8px 12px; color: #065F46; overflow-wrap: anywhere; }
         .status.err { color: #B91C1C; }
       </style>
       <div class="wrap" style="position:relative">
@@ -87,10 +92,40 @@
     return w > 0 && h > 0 ? w * h : 0;
   }
 
+  /** Players built as web components keep their media in shadow roots, which querySelectorAll cannot reach. */
+  function mediaElements() {
+    const found = document.querySelectorAll("video, audio");
+    if (found.length) return found;
+    if (Date.now() - lastShadowScan > 2000) {
+      lastShadowScan = Date.now();
+      shadowMedia = [];
+      collectShadowMedia(document);
+    }
+    return shadowMedia.filter((el) => el.isConnected);
+  }
+
+  function collectShadowMedia(root) {
+    for (const el of root.querySelectorAll("*")) {
+      if (!el.shadowRoot) continue;
+      shadowMedia.push(...el.shadowRoot.querySelectorAll("video, audio"));
+      collectShadowMedia(el.shadowRoot);
+    }
+  }
+
+  /** Media with no usable element (audio, canvas players): offer the button at the page corner instead. */
+  function showCornerButton() {
+    if (window !== window.top || mediaCount === 0) return false;
+    // A sizeable frame has its own content script and button.
+    return ![...document.querySelectorAll("iframe")].some((f) => {
+      const r = f.getBoundingClientRect();
+      return r.width * r.height >= LARGE_FRAME_AREA;
+    });
+  }
+
   function pickTarget() {
     let best = null;
     let bestArea = 0;
-    for (const el of document.querySelectorAll("video, audio")) {
+    for (const el of mediaElements()) {
       const area = visibleArea(el);
       if (area > bestArea) {
         best = el;
@@ -119,7 +154,7 @@
       if (target) resize.observe(target);
       closeMenu();
     }
-    if (!target) {
+    if (!target && !showCornerButton()) {
       setVisible(false);
       return;
     }
@@ -128,13 +163,13 @@
     // In fullscreen only the fullscreen element's subtree is painted; follow it unless it is the video itself.
     const fs = document.fullscreenElement;
     const parent = fs && fs !== target && !(fs instanceof HTMLMediaElement) ? fs : document.documentElement;
-    if (fs === target) {
+    if (fs && fs === target) {
       setVisible(false);
       return;
     }
     if (host.parentNode !== parent) parent.appendChild(host);
 
-    const r = target.getBoundingClientRect();
+    const r = target ? target.getBoundingClientRect() : { top: 0, right: innerWidth };
     const top = Math.max(r.top, 0) + 10;
     const right = Math.min(r.right, innerWidth) - 10;
     host.style.top = `${top}px`;
@@ -195,7 +230,7 @@
     menu.hidden = false;
     menu.innerHTML = `<div class="note">Looking for media…</div>`;
     const res = await chrome.runtime.sendMessage({ type: "get-media", pageUrl: location.href }).catch(() => null);
-    const items = [...(res?.items ?? [])];
+    const items = mergeStreams(res?.items ?? [], pageStreams());
     const direct = directSource();
     if (direct && !items.some((i) => i.url === direct)) {
       items.unshift({ url: direct, kind: target.localName === "audio" ? "audio" : "progressive", mime: null, size: null });
@@ -204,13 +239,50 @@
     menu.textContent = "";
     // On sites like YouTube the player's own requests are unusable fragments; ask yt-dlp straight away.
     if (res?.siteNeedsYtDlp) return findFormats();
+    renderItems(items);
+  }
 
-    if (!items.length) {
+  /**
+   * HLS and DASH manifests this frame loaded, from the browser's own record. Unlike network watching, this survives
+   * an extension reload, a restarted service worker, and a manifest fetched before the extension was listening.
+   */
+  function pageStreams() {
+    const byFolder = new Map();
+    for (const entry of performance.getEntriesByType("resource")) {
+      const path = entry.name.split(/[?#]/)[0];
+      const type = /\.(m3u8|mpd)$/i.exec(path)?.[1].toLowerCase();
+      if (!type) continue;
+      // Entries are in load order, and players fetch the master playlist before its qualities.
+      const folder = path.replace(/[^/]*$/, "");
+      if (!byFolder.has(folder)) {
+        byFolder.set(folder, { url: entry.name, kind: type === "mpd" ? "dash" : "hls", mime: null, size: null });
+      }
+    }
+    return [...byFolder.values()];
+  }
+
+  function mergeStreams(items, streams) {
+    const folderOf = (url) => url.split(/[?#]/)[0].replace(/[^/]*$/, "");
+    const known = new Set(items.filter((i) => i.kind === "hls" || i.kind === "dash").map((i) => folderOf(i.url)));
+    return [...streams.filter((s) => !known.has(folderOf(s.url))), ...items];
+  }
+
+  function renderItems(items, note) {
+    lastItems = items;
+    menu.textContent = "";
+    if (note) {
+      const el = document.createElement("div");
+      el.className = "note";
+      el.textContent = note;
+      menu.append(el);
+    }
+    if (!items.length && !note) {
       menu.innerHTML = `<div class="note">No downloadable media found yet.<br>Play the video for a few seconds, or find formats below.</div>`;
     }
     for (const item of items) {
-      const name = decodeURIComponent(new URL(item.url).pathname.split("/").pop() || item.url);
-      menu.append(menuItem(name, describe(item), () => send(item)));
+      const stream = item.kind === "hls" || item.kind === "dash";
+      const name = stream ? "Video stream" : decodeURIComponent(new URL(item.url).pathname.split("/").pop() || item.url);
+      menu.append(menuItem(name, stream ? `${describe(item)} · choose quality next` : describe(item), () => send(item)));
     }
     menu.append(menuItem("Find all formats…", "Ask yt-dlp which qualities this page offers", findFormats));
   }
@@ -235,7 +307,14 @@
     if (menu.hidden) return;
     menu.textContent = "";
     if (!res?.formats?.length) {
-      menu.innerHTML = `<div class="status err">${escapeHtml(res?.error || "No formats found on this page")}</div>`;
+      // yt-dlp knows only some sites; what the page itself loaded can still be downloaded.
+      const unsupported = /unsupported url/i.test(res?.error ?? "");
+      const note = unsupported
+        ? lastItems.length
+          ? "yt-dlp does not support this site. Use a stream below."
+          : "yt-dlp does not support this site, and no stream was found. Reload the page, play the video for a few seconds, and open this menu again."
+        : res?.error || "No formats found on this page.";
+      renderItems(lastItems, note);
       return;
     }
     const title = res.title || pageTitle();
@@ -288,11 +367,15 @@
   async function refreshSettings() {
     const res = await chrome.runtime.sendMessage({ type: "get-media", pageUrl: location.href }).catch(() => null);
     showButton = res ? res.showVideoButton : true;
+    mediaCount = (res?.items?.length ?? 0) + pageStreams().length;
     schedule();
   }
 
   chrome.runtime.onMessage.addListener((msg) => {
-    if (msg.type === "media-updated") schedule();
+    if (msg.type === "media-updated") {
+      mediaCount = msg.count;
+      schedule();
+    }
   });
 
   // Alt+click on a link lets the browser download it itself.
