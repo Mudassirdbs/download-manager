@@ -8,12 +8,13 @@ Manager's browser integration behaves; no IDM code, assets or protocol are reuse
 
 ## Download
 
-Get the installer from the [latest release](https://github.com/Mudassirdbs/download-manager/releases/latest):
+Open the [latest release](https://github.com/Mudassirdbs/download-manager/releases/latest) and download the
+installer for your PC from **Assets**:
 
 | Your PC | File |
 |---|---|
-| Windows 10 (1607+) or 11, Intel/AMD — almost everyone | [`DownloadManager-Setup-1.0.0-x64.exe`](https://github.com/Mudassirdbs/download-manager/releases/download/v1.0.0/DownloadManager-Setup-1.0.0-x64.exe) |
-| Windows 11 on ARM (Snapdragon, Surface Pro X/11) | [`DownloadManager-Setup-1.0.0-arm64.exe`](https://github.com/Mudassirdbs/download-manager/releases/download/v1.0.0/DownloadManager-Setup-1.0.0-arm64.exe) |
+| Windows 10 (1607+) or 11, Intel/AMD — almost everyone | `DownloadManager-Setup-<version>-x64.exe` |
+| Windows 11 on ARM (Snapdragon, Surface Pro X/11) | `DownloadManager-Setup-<version>-arm64.exe` |
 
 Not sure which? *Settings → System → About → System type* says "x64-based" or "ARM-based".
 
@@ -21,8 +22,11 @@ Not sure which? *Settings → System → About → System type* says "x64-based"
    needs, including .NET, FFmpeg and yt-dlp.
 2. Windows may show **"Windows protected your PC"** because the installer is not code-signed yet: choose
    **More info → Run anyway**.
-3. On first start, the Setup window shows how to add the browser extension (Chrome, Edge, Brave). Until the
-   extension is in the browser stores, it is loaded from the app's folder in Developer mode.
+3. Add the browser extension (Chrome, Edge, Brave). Until it is in the browser stores: open
+   `chrome://extensions` (or `edge://extensions`), turn on **Developer mode**, choose **Load unpacked** and pick
+   the `extension` folder in DownloadManager's install folder (the first-run Setup window has a button that
+   opens it), or unzip `DownloadManager-extension-<version>.zip` from the release and pick that folder.
+   Don't load the `DownloadManager-store-…` zips: they are for publishing to the stores and will not connect.
 
 To uninstall, use *Settings → Apps → DownloadManager*.
 

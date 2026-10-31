@@ -139,7 +139,7 @@ public partial class AddDownloadWindow : Window
 
     async Task FindFormatsAsync(string url)
     {
-        if (_tools.YtDlp is not { } ytDlp)
+        if (_tools.YtDlp is null)
         {
             ShowError("yt-dlp is not installed. Install it from Tools in the main window.");
             return;
@@ -148,7 +148,7 @@ public partial class AddDownloadWindow : Window
         try
         {
             var ctx = _source is null ? new RequestContext() : App.ContextOf(_source);
-            var info = await Task.Run(() => YtDlp.ResolveAsync(ytDlp, url, ctx, _closing.Token));
+            var info = await Task.Run(() => YtDlp.ResolveAsync(_tools, url, ctx, _closing.Token));
             _title = info.Title;
             SetOptions(info.Choices.Select(c => new QualityOption(
                 c.Label + (c.Size is { } s ? $" · ~{Format.Bytes(s)}" : ""), DownloadKind.YtDlp, Format: c)).ToList());

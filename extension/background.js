@@ -31,7 +31,24 @@ const state = {
   media: new Map(), // tabId -> Map(key -> item)
   bypassUntil: 0,
   retryTimer: null,
+  problem: null, // why the last connection attempt failed, in words a user can act on
 };
+
+/** Turns Chrome's native-messaging errors and the host's own error codes into an actionable message. */
+function describeFailure(raw) {
+  const text = String(raw || "");
+  if (/forbidden/i.test(text))
+    return `This copy of the extension (ID ${chrome.runtime.id}) is not the one DownloadManager trusts. ` +
+      `Remove it and load the "extension" folder from DownloadManager's install folder instead ` +
+      `(DownloadManager tray icon → Setup… → Open extension folder).`;
+  if (/not found/i.test(text))
+    return "DownloadManager is not installed or has not been opened yet. Install it, open it once, then try again.";
+  if (text === "app_not_running") return "DownloadManager is not running.";
+  if (text === "app_unavailable") return "DownloadManager could not be started. Open it from the Start menu and try again.";
+  if (text === "timeout") return "DownloadManager did not answer in time. Open it from the Start menu and try again.";
+  if (/exited/i.test(text)) return "DownloadManager's browser helper stopped unexpectedly. Reinstalling DownloadManager usually fixes this.";
+  return text || "DownloadManager could not be reached.";
+}
 
 // ---------------------------------------------------------------- connection
 
@@ -43,11 +60,14 @@ function connect(launch) {
     try {
       port = chrome.runtime.connectNative(HOST);
     } catch (e) {
-      finish(false);
+      state.problem = describeFailure(e?.message);
+      resolve(false);
+      state.connecting = null;
       return;
     }
     state.port = port;
     const timer = setTimeout(() => {
+      state.problem = describeFailure("timeout");
       port.disconnect();
       finish(false);
     }, launch ? REQUEST_TIMEOUT_MS : 5000);
@@ -65,10 +85,12 @@ function connect(launch) {
     port.onMessage.addListener((msg) => {
       if (msg.type === "hello") {
         state.connected = true;
+        state.problem = null;
         if (msg.config) state.config = { ...state.config, ...msg.config };
         updateAllBadges();
         finish(true);
       } else if (msg.type === "error") {
+        state.problem = describeFailure(msg.error);
         port.disconnect();
         finish(false);
       } else {
@@ -76,7 +98,8 @@ function connect(launch) {
       }
     });
     port.onDisconnect.addListener(() => {
-      void chrome.runtime.lastError;
+      const reason = chrome.runtime.lastError?.message;
+      if (reason) state.problem = describeFailure(reason);
       if (state.port === port) {
         state.port = null;
         state.connected = false;
@@ -120,7 +143,7 @@ function onHostMessage(msg) {
 
 /** Sends a request to the app and resolves with its "result". `launch` starts the app if needed. */
 async function request(message, launch, timeoutMs = REQUEST_TIMEOUT_MS) {
-  if (!(await connect(launch))) return { accepted: false, error: "The DownloadManager app could not be started" };
+  if (!(await connect(launch))) return { accepted: false, error: state.problem || describeFailure("app_unavailable") };
   const requestId = crypto.randomUUID();
   return new Promise((resolve) => {
     const timer = setTimeout(() => {
@@ -362,6 +385,7 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
       reply({
         items: mediaFor(tabId),
         connected: state.connected,
+        problem: state.connected ? null : state.problem,
         enabled: state.userEnabled,
         showVideoButton: state.config.showVideoButton && state.userEnabled && !siteExcluded(msg.pageUrl || sender.url || ""),
         siteNeedsYtDlp: hostMatches(msg.pageUrl || sender.url || "", YTDLP_SITES),

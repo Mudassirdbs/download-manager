@@ -15,7 +15,7 @@ async function render() {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   const res = await chrome.runtime.sendMessage({ type: "get-media", tabId: tab?.id, pageUrl: tab?.url });
   $("dot").classList.toggle("on", res.connected);
-  $("status").textContent = res.connected ? "Connected to the desktop app" : "Desktop app is not running";
+  $("status").textContent = res.connected ? "Connected to the desktop app" : res.problem || "Desktop app is not running";
   $("enabled").checked = res.enabled;
 
   const list = $("list");

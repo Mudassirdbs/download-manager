@@ -194,11 +194,11 @@ public partial class App : Application
                 return new BridgeMessage { Type = "hello", Version = typeof(App).Assembly.GetName().Version?.ToString(), Config = _config };
 
             case "resolve":
-                if (_service!.Tools.YtDlp is not { } ytDlp)
+                if (_service!.Tools.YtDlp is null)
                     return new BridgeMessage { Type = "formats", RequestId = message.RequestId, Error = "yt-dlp is not installed. Open DownloadManager → Tools to install it." };
                 try
                 {
-                    var info = await YtDlp.ResolveAsync(ytDlp, message.PageUrl ?? message.Url ?? "", ContextOf(message), CancellationToken.None);
+                    var info = await YtDlp.ResolveAsync(_service.Tools, message.PageUrl ?? message.Url ?? "", ContextOf(message), CancellationToken.None);
                     return new BridgeMessage { Type = "formats", RequestId = message.RequestId, Title = info.Title, Formats = info.Choices };
                 }
                 catch (Exception ex)

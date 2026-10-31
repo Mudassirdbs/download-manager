@@ -11,11 +11,44 @@ public sealed record MediaInfo(string Title, string? Extractor, double? Duration
 
 public static class YtDlp
 {
-    /// <summary>Asks yt-dlp what the page offers (<c>-J</c>, no download).</summary>
-    public static async Task<MediaInfo> ResolveAsync(string ytDlp, string url, RequestContext ctx, CancellationToken token)
+    /// <summary>
+    /// Asks yt-dlp what the page offers (<c>-J</c>, no download). Signed-in YouTube requests lose their formats when
+    /// no JavaScript runtime can solve the site's challenge, so a page with no formats is retried without cookies.
+    /// </summary>
+    public static async Task<MediaInfo> ResolveAsync(Tools tools, string url, RequestContext ctx, CancellationToken token)
     {
+        try
+        {
+            return await LookUpAsync(tools, url, ctx, token);
+        }
+        catch (InvalidOperationException ex) when (ShouldRetryWithoutCookies(ex.Message, ctx))
+        {
+            Log.Warn($"yt-dlp found no formats with cookies for {Log.Redact(url)}; retrying without them");
+            return await LookUpAsync(tools, url, WithoutCookies(ctx), token);
+        }
+    }
+
+    internal static bool ShouldRetryWithoutCookies(string error, RequestContext ctx) =>
+        (ctx.CookieJar is { Count: > 0 } || !string.IsNullOrEmpty(ctx.Cookies))
+        && (error.Contains("Requested format is not available", StringComparison.OrdinalIgnoreCase)
+            || error.Contains("No video formats found", StringComparison.OrdinalIgnoreCase)
+            || error.Contains("Only images are available", StringComparison.OrdinalIgnoreCase));
+
+    internal static RequestContext WithoutCookies(RequestContext ctx) => ctx with { Cookies = null, CookieJar = null };
+
+    /// <summary>yt-dlp enables only Deno by default and looks for it on PATH; name the runtime we found.</summary>
+    internal static void AddJsRuntime(List<string> args, Tools tools)
+    {
+        if (tools.Deno is { } deno) args.AddRange(["--js-runtimes", "deno:" + deno]);
+        else if (tools.Node is { } node) args.AddRange(["--js-runtimes", "node:" + node]);
+    }
+
+    static async Task<MediaInfo> LookUpAsync(Tools tools, string url, RequestContext ctx, CancellationToken token)
+    {
+        var ytDlp = tools.YtDlp ?? throw new InvalidOperationException("yt-dlp is not installed");
         using var cookies = CookieFile.Create(url, ctx);
         var args = new List<string> { "-J", "--no-playlist", "--no-warnings", "--no-progress", "--color", "never", "--encoding", "utf-8" };
+        AddJsRuntime(args, tools);
         AddContext(args, ctx, cookies);
         args.Add(url);
 
@@ -241,10 +274,23 @@ public sealed class YtDlpTask : ITransfer
 
     async Task RunOnceAsync(CancellationToken token)
     {
+        try
+        {
+            await TransferAsync(_item.Request, token);
+        }
+        catch (InvalidOperationException ex) when (YtDlp.ShouldRetryWithoutCookies(ex.Message, _item.Request))
+        {
+            Log.Warn($"yt-dlp found no formats with cookies for {Log.Redact(_item.Url)}; retrying without them");
+            await TransferAsync(YtDlp.WithoutCookies(_item.Request), token);
+        }
+    }
+
+    async Task TransferAsync(RequestContext request, CancellationToken token)
+    {
         var ytDlp = _tools.YtDlp ?? throw new InvalidOperationException("yt-dlp is not installed (Tools → Install yt-dlp)");
         Directory.CreateDirectory(_item.Folder);
         var stem = Path.GetFileNameWithoutExtension(_item.FileName ?? "%(title)s");
-        using var cookies = CookieFile.Create(_item.Url, _item.Request);
+        using var cookies = CookieFile.Create(_item.Url, request);
 
         var args = new List<string>
         {
@@ -261,7 +307,8 @@ public sealed class YtDlpTask : ITransfer
         if (_tools.Ffmpeg is { } ffmpeg) args.AddRange(["--ffmpeg-location", ffmpeg]);
         var limit = new[] { _item.SpeedLimit, _options.GlobalLimiter?.BytesPerSecond ?? 0 }.Where(l => l > 0).DefaultIfEmpty(0).Min();
         if (limit > 0) args.AddRange(["--limit-rate", limit.ToString(CultureInfo.InvariantCulture)]);
-        YtDlp.AddContext(args, _item.Request, cookies);
+        YtDlp.AddJsRuntime(args, _tools);
+        YtDlp.AddContext(args, request, cookies);
         args.Add(_item.Url);
 
         Set(DownloadStatus.Connecting);

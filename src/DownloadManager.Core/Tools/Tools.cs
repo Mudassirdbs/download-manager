@@ -6,7 +6,7 @@ namespace DownloadManager.Core;
 /// </summary>
 public sealed class Tools
 {
-    string? _ffmpeg, _ytDlp;
+    string? _ffmpeg, _ytDlp, _deno, _node;
     bool _scanned;
 
     public static string DefaultFolder => Path.Combine(
@@ -31,6 +31,17 @@ public sealed class Tools
         get { Scan(); return _ytDlp; }
     }
 
+    /// <summary>JavaScript runtimes yt-dlp needs for YouTube's challenges.</summary>
+    public string? Deno
+    {
+        get { Scan(); return _deno; }
+    }
+
+    public string? Node
+    {
+        get { Scan(); return _node; }
+    }
+
     public void Refresh() => _scanned = false;
 
     void Scan()
@@ -38,6 +49,8 @@ public sealed class Tools
         if (_scanned) return;
         _ffmpeg = Find("ffmpeg.exe");
         _ytDlp = Find("yt-dlp.exe");
+        _deno = Find("deno.exe");
+        _node = Find("node.exe");
         _scanned = true;
     }
 

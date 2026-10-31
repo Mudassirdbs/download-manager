@@ -12,8 +12,12 @@ Produces in `publish\`:
 |---|---|
 | `DownloadManager-Setup-<ver>-x64.exe` | Windows 10 (1607+) and 11 on Intel/AMD — almost everyone |
 | `DownloadManager-Setup-<ver>-arm64.exe` | Windows 11 on ARM (Surface Pro X/11, Snapdragon laptops) |
-| `store\DownloadManager-chromium-<ver>.zip` | Chrome Web Store and Edge Add-ons |
-| `store\DownloadManager-firefox-<ver>.zip` | addons.mozilla.org |
+| `DownloadManager-extension-<ver>.zip` | Manual install ("Load unpacked"); keeps the fixed ID the app trusts |
+| `store\DownloadManager-store-chromium-<ver>.zip` | Upload to the Chrome Web Store and Edge Add-ons only |
+| `store\DownloadManager-store-firefox-<ver>.zip` | Upload to addons.mozilla.org only |
+
+The store packages have no `key`, so the stores can assign their own ID. Loaded unpacked, they get a random ID
+that the app refuses ("not the one DownloadManager trusts"); use the `extension` zip or folder for that.
 
 The installers bundle the .NET runtime, install per user without administrator rights, add a Start menu entry
 and an uninstaller, and optionally start the app with Windows. Silent install: `Setup.exe /VERYSILENT`.
@@ -44,7 +48,7 @@ Already-installed copies pick up a new `distribution.json` when the app restarts
 
 ### Chrome Web Store
 - Developer account: <https://chrome.google.com/webstore/devconsole> (one-time US$5 fee).
-- Upload `DownloadManager-chromium-<ver>.zip`. Category: *Productivity*. Single purpose: *"Send downloads and
+- Upload `DownloadManager-store-chromium-<ver>.zip`. Category: *Productivity*. Single purpose: *"Send downloads and
   page videos to the DownloadManager desktop app."*
 - Copy the item ID from the dashboard into `distribution.json`.
 
@@ -52,7 +56,7 @@ Already-installed copies pick up a new `distribution.json` when the app restarts
 - Partner Center: <https://partner.microsoft.com/dashboard/microsoftedge> (free). Upload the same chromium zip.
 
 ### Firefox (addons.mozilla.org)
-- <https://addons.mozilla.org/developers/> (free). Upload `DownloadManager-firefox-<ver>.zip`; Mozilla signs it.
+- <https://addons.mozilla.org/developers/> (free). Upload `DownloadManager-store-firefox-<ver>.zip`; Mozilla signs it.
   The ID `downloadmanager@local` comes from the manifest and is already allowed. If you change it to an address
   you own (recommended, e.g. `downloadmanager@yourdomain.com`), update it in `extension\manifest.json`,
   `src\DownloadManager.Core\Protocol.cs` (`FirefoxExtensionId`) and `distribution.json`.

@@ -56,6 +56,41 @@ public sealed class YtDlpTests
         Assert.Equal("b[height<=1080]", alternatives[^1]);
     }
 
+    [Theory]
+    [InlineData("ERROR: [youtube] abc: Requested format is not available. Use --list-formats", true)]
+    [InlineData("ERROR: [youtube] abc: No video formats found!", true)]
+    [InlineData("ERROR: [youtube] abc: Private video. Sign in", false)]
+    public void Retries_without_cookies_only_when_formats_are_missing(string error, bool retry)
+    {
+        var signedIn = new RequestContext { Cookies = "SID=1" };
+        Assert.Equal(retry, YtDlp.ShouldRetryWithoutCookies(error, signedIn));
+        Assert.False(YtDlp.ShouldRetryWithoutCookies(error, new RequestContext()));
+        Assert.Null(YtDlp.WithoutCookies(signedIn).Cookies);
+    }
+
+    [Fact]
+    public void Prefers_deno_over_node_as_the_js_runtime()
+    {
+        var folder = Path.Combine(Path.GetTempPath(), "dm-rt-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(folder);
+        try
+        {
+            File.WriteAllText(Path.Combine(folder, "node.exe"), "");
+            var args = new List<string>();
+            YtDlp.AddJsRuntime(args, new Tools(folder, searchPath: false));
+            Assert.Equal(["--js-runtimes", "node:" + Path.Combine(folder, "node.exe")], args);
+
+            File.WriteAllText(Path.Combine(folder, "deno.exe"), "");
+            args.Clear();
+            YtDlp.AddJsRuntime(args, new Tools(folder, searchPath: false));
+            Assert.Equal(["--js-runtimes", "deno:" + Path.Combine(folder, "deno.exe")], args);
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
+
     [Fact]
     public void Live_pages_are_refused()
     {

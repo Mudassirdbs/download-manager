@@ -3,8 +3,9 @@
   Builds everything needed to give DownloadManager to other people:
     publish\DownloadManager-Setup-<version>-x64.exe     (Windows 10/11, Intel/AMD)
     publish\DownloadManager-Setup-<version>-arm64.exe   (Windows 11 on ARM)
-    publish\store\DownloadManager-chromium-<version>.zip (Chrome Web Store and Edge Add-ons upload)
-    publish\store\DownloadManager-firefox-<version>.zip  (addons.mozilla.org upload)
+    publish\DownloadManager-extension-<version>.zip      (extension for "Load unpacked"; has the ID the app trusts)
+    publish\store\DownloadManager-store-chromium-<version>.zip (Chrome Web Store and Edge Add-ons upload only)
+    publish\store\DownloadManager-store-firefox-<version>.zip  (addons.mozilla.org upload only)
 
   The app is published self-contained, so target machines need no .NET installation. ffmpeg (LGPL build) and
   yt-dlp are bundled, so streams and site videos work right after install. They come from the official
@@ -75,12 +76,17 @@ $staging = Join-Path $publish "staging"
 $store = Join-Path $publish "store"
 New-Item -ItemType Directory -Force $store | Out-Null
 
+# The keyed copy has the fixed ID the native host trusts. It ships inside the app and as the release's
+# "extension" zip for Load unpacked. The store packages have no key (the stores assign their own ID), so a
+# store package loaded unpacked gets a random ID that the app refuses; their names say they are for the stores.
 New-ExtensionPackage "chromium" (Join-Path $staging "extension") $true
+& tar.exe -a -c -f (Join-Path $publish "DownloadManager-extension-$version.zip") -C (Join-Path $staging "extension") *
+if ($LASTEXITCODE -ne 0) { throw "Packaging the unpacked extension failed" }
 
 foreach ($flavor in "chromium", "firefox") {
     $dir = Join-Path $staging "store-$flavor"
     New-ExtensionPackage $flavor $dir $false
-    $zip = Join-Path $store "DownloadManager-$flavor-$version.zip"
+    $zip = Join-Path $store "DownloadManager-store-$flavor-$version.zip"
     # bsdtar writes forward-slash entry names, which the store validators require.
     & tar.exe -a -c -f $zip -C $dir *
     if ($LASTEXITCODE -ne 0) { throw "Packaging $flavor failed" }
