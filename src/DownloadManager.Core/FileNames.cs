@@ -19,7 +19,7 @@ public static class FileNames
         Add("Programs", "exe msi msix appx apk dmg");
     }
 
-    /// <summary>IDM-style category folder for a file name; "General" when the extension is unknown.</summary>
+    /// <summary>Category folder for a file name; "General" when the extension is unknown.</summary>
     public static string CategoryOf(string? fileName)
     {
         var ext = Path.GetExtension(fileName ?? "").TrimStart('.');

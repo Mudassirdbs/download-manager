@@ -1,0 +1,39 @@
+name: Bug report
+description: Something does not work as expected
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: Include the exact error text and the steps to reproduce it.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect?
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: DownloadManager version
+      placeholder: "1.0.1"
+    validations:
+      required: true
+  - type: input
+    id: system
+    attributes:
+      label: Windows version and browser
+      placeholder: Windows 11 24H2, Chrome 141
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: >-
+        Relevant lines from %LOCALAPPDATA%\DownloadManager\logs. Remove anything private first, and never post
+        cookies or passwords.
+      render: text

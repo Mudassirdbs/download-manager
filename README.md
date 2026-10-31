@@ -3,8 +3,8 @@
 A Windows download manager (C# / .NET 8 WPF) with a browser extension that hands downloads to the
 app and puts a **Download** button over videos on web pages.
 
-This is an original implementation. Its design was informed by studying how Internet Download
-Manager's browser integration behaves; no IDM code, assets or protocol are reused.
+This is an independent, open-source project under the [MIT License](LICENSE). It is not affiliated with any
+other download manager. See [CONTRIBUTING.md](CONTRIBUTING.md) to help out.
 
 ## Download
 
@@ -96,3 +96,12 @@ choose **Load unpacked** and select the `extension` folder. The fixed key in `ma
 ID `fbogbaonaiahnkkinepjjoephghacphe`, which the native host manifest allows.
 
 Firefox: `about:debugging` → This Firefox → **Load Temporary Add-on** → `extension/manifest.json`.
+
+## Contributing
+
+Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## License
+
+DownloadManager is released under the [MIT License](LICENSE). Installers also include FFmpeg, yt-dlp and the .NET
+runtime under their own licenses, listed in `THIRD-PARTY-NOTICES.txt` in the install folder.
