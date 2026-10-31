@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -17,6 +18,7 @@ public partial class App : Application
     BridgeServer? _bridge;
     Forms.NotifyIcon? _tray;
     MainWindow? _main;
+    readonly Dictionary<Guid, ProgressWindow> _progress = [];
     Forms.ToolStripMenuItem? _autostartItem;
     readonly BridgeConfig _config = new();
     readonly CancellationTokenSource _exiting = new();
@@ -85,7 +87,11 @@ public partial class App : Application
         _service.Load();
 
         _bridge = new BridgeServer(HandleBridgeAsync);
-        _main = new MainWindow(_service, _bridge, NewDownload);
+        _main = new MainWindow(_service, _bridge, NewDownload, ShowProgress);
+        _service.Removed += item => Dispatcher.BeginInvoke(() =>
+        {
+            if (_progress.TryGetValue(item.Id, out var window)) window.Close();
+        });
         _tray = CreateTray();
         _bridge.Start();
         _showWait = ThreadPool.RegisterWaitForSingleObject(_showSignal, (_, _) => Dispatcher.BeginInvoke(ShowMain), null, -1, false);
@@ -181,6 +187,7 @@ public partial class App : Application
         _bridge?.Dispose();
         _service?.Dispose();
         if (_tray is not null) { _tray.Visible = false; _tray.Dispose(); }
+        foreach (var window in _progress.Values.ToList()) window.Close();
         _main?.CloseForExit();
         _instance?.ReleaseMutex();
         Shutdown();
@@ -241,6 +248,20 @@ public partial class App : Application
     {
         var dialog = new AddDownloadWindow(from, _service!.Tools);
         if (_main is { IsVisible: true }) dialog.Owner = _main;
-        if (dialog.ShowDialog() == true && dialog.Result is { } item) _service!.Add(item, dialog.StartNow);
+        if (dialog.ShowDialog() != true || dialog.Result is not { } item) return;
+        _service!.Add(item, dialog.StartNow);
+        if (dialog.StartNow && _service.Settings.ShowProgressWindow) ShowProgress(item);
+    }
+
+    void ShowProgress(DownloadItem item)
+    {
+        if (!_progress.TryGetValue(item.Id, out var window))
+        {
+            window = new ProgressWindow(_service!, item);
+            _progress[item.Id] = window;
+            window.Closed += (_, _) => _progress.Remove(item.Id);
+        }
+        window.Show();
+        window.Activate();
     }
 }

@@ -11,6 +11,8 @@ public sealed class DownloadSettings
     public int MaxConcurrentDownloads { get; set; } = 3;
     /// <summary>Combined limit for all downloads in bytes per second; 0 means unlimited.</summary>
     public long GlobalSpeedLimit { get; set; }
+    /// <summary>Open a progress window whenever a download starts.</summary>
+    public bool ShowProgressWindow { get; set; } = true;
     /// <summary>The first-run setup window was completed or dismissed.</summary>
     public bool SetupShown { get; set; }
     /// <summary>Last automatic yt-dlp update check; sites change often and old versions stop working.</summary>

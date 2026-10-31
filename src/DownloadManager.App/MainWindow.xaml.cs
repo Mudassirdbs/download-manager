@@ -15,16 +15,18 @@ public partial class MainWindow : Window
     readonly DownloadService _service;
     readonly BridgeServer _bridge;
     readonly Action<BridgeMessage?> _newDownload;
+    readonly Action<DownloadItem> _showProgress;
     readonly ObservableCollection<DownloadRow> _rows = [];
     readonly Dictionary<Guid, DownloadRow> _byId = [];
     bool _exiting;
 
-    internal MainWindow(DownloadService service, BridgeServer bridge, Action<BridgeMessage?> newDownload)
+    internal MainWindow(DownloadService service, BridgeServer bridge, Action<BridgeMessage?> newDownload, Action<DownloadItem> showProgress)
     {
         InitializeComponent();
         _service = service;
         _bridge = bridge;
         _newDownload = newDownload;
+        _showProgress = showProgress;
         DownloadsGrid.ItemsSource = _rows;
 
         foreach (var item in service.Items.OrderByDescending(i => i.Added)) AddRow(item, atTop: false);
@@ -159,7 +161,11 @@ public partial class MainWindow : Window
         foreach (var item in Selected) _service.Remove(item.Id, withFiles);
     }
 
-    void OnRowDoubleClick(object sender, System.Windows.Input.MouseButtonEventArgs e) => OnOpenFile(sender, e);
+    void OnRowDoubleClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        if (Selected.FirstOrDefault() is { Status: not DownloadStatus.Completed } item) _showProgress(item);
+        else OnOpenFile(sender, e);
+    }
 
     void OnOpenFile(object sender, RoutedEventArgs e)
     {
